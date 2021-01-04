@@ -1,0 +1,153 @@
+import org.deeplearning4j.eval.Evaluation
+import org.deeplearning4j.nn.api.{Layer, OptimizationAlgorithm}
+import org.deeplearning4j.nn.conf.{Updater, NeuralNetConfiguration}
+import org.deeplearning4j.nn.conf.layers.{OutputLayer, DenseLayer}
+import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
+import org.deeplearning4j.nn.weights.WeightInit
+import org.nd4j.linalg.factory.Nd4j
+import org.nd4j.linalg.api.ndarray.INDArray
+import org.nd4j.linalg.lossfunctions.LossFunctions
+
+val rdd = sc.textFile("iris.data").map( x => x.split(","))
+
+val data = rdd.map( x => x.slice(0,4))
+
+val data1 = data.map( x => x.map( y => y.toDouble )).collect
+
+val input = Nd4j.create(data1)
+ 
+val categ_iris = rdd.map( x => x(4)).distinct.zipWithIndex.collect.toMap
+
+val label = rdd.map( x => {
+  val l = categ_iris(x(4)).toInt
+  l match {
+    case 0 => Array(1.0,0.0,0.0)
+    case 1 => Array(0.0,1.0,0.0)
+    case 2 => Array(0.0,0.0,1.0)
+  }
+})
+
+val label1 = label.collect
+
+val labels = Nd4j.create(label1)
+
+import org.nd4j.linalg.dataset.DataSet
+var iris: DataSet = new DataSet(input,labels)
+
+iris.shuffle()
+//iris.normalizeZeroMeanZeroUnitVariance()
+val testAndTrain = iris.splitTestAndTrain(0.80)
+val train = testAndTrain.getTrain
+val test = testAndTrain.getTest
+
+val numInputs = 4
+val outputNum = 3
+val iterations = 100
+
+val multiLayerConfig = new NeuralNetConfiguration.Builder().
+ seed(12345).
+ iterations(iterations).
+ optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT).
+ learningRate(1e-1).
+ l1(0.01).
+ regularization(true).l2(1e-3).
+ list(3).
+ layer(0, new DenseLayer.Builder().
+   nIn(numInputs).nOut(20).
+   activation("tanh").
+   weightInit(WeightInit.XAVIER).
+   build()).
+ layer(1, new DenseLayer.Builder().nIn(20).nOut(50).
+   activation("tanh").
+   weightInit(WeightInit.XAVIER).
+   build()).
+ layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT).
+   weightInit(WeightInit.XAVIER).
+   activation("softmax").
+   nIn(50).nOut(outputNum).build()).
+ backprop(true).pretrain(false).
+ build()
+ 
+val model:MultiLayerNetwork = new MultiLayerNetwork(multiLayerConfig)
+model.init
+model.setUpdater(null)
+
+val nEpochs = 5
+(0 until nEpochs).foreach{i => 
+  // Train the model
+  model.fit(train)
+
+  val eval = new Evaluation()
+  val output = model.output(test.getFeatureMatrix, Layer.TrainingMode.TEST)
+
+  eval.eval(test.getLabels(), output)
+  println("Statistics..."+eval.stats())
+}
+2021-01-04 17:38:10 WARN  Evaluation:89 - Creating confusion matrix based on classes passed in . Will assume the label distribution passed in is indicative of the overall dataset
+Statistics...
+Examples labeled as 0 classified by model as 0: 6 times
+Examples labeled as 1 classified by model as 1: 8 times
+Examples labeled as 2 classified by model as 1: 13 times
+Examples labeled as 2 classified by model as 2: 3 times
+
+
+==========================Scores========================================
+ Accuracy:  0.5667
+ Precision: 0.7937
+ Recall:    0.7292
+ F1 Score:  0.76
+========================================================================
+2021-01-04 17:38:11 WARN  Evaluation:89 - Creating confusion matrix based on classes passed in . Will assume the label distribution passed in is indicative of the overall dataset
+Statistics...
+Examples labeled as 0 classified by model as 0: 6 times
+Examples labeled as 1 classified by model as 1: 8 times
+Examples labeled as 2 classified by model as 1: 11 times
+Examples labeled as 2 classified by model as 2: 5 times
+
+
+==========================Scores========================================
+ Accuracy:  0.6333
+ Precision: 0.807
+ Recall:    0.7708
+ F1 Score:  0.7885
+========================================================================
+2021-01-04 17:38:11 WARN  Evaluation:89 - Creating confusion matrix based on classes passed in . Will assume the label distribution passed in is indicative of the overall dataset
+Statistics...
+Examples labeled as 0 classified by model as 0: 6 times
+Examples labeled as 1 classified by model as 1: 8 times
+Examples labeled as 2 classified by model as 1: 3 times
+Examples labeled as 2 classified by model as 2: 13 times
+
+
+==========================Scores========================================
+ Accuracy:  0.9
+ Precision: 0.9091
+ Recall:    0.9375
+ F1 Score:  0.9231
+========================================================================
+2021-01-04 17:38:12 WARN  Evaluation:89 - Creating confusion matrix based on classes passed in . Will assume the label distribution passed in is indicative of the overall dataset
+Statistics...
+Examples labeled as 0 classified by model as 0: 6 times
+Examples labeled as 1 classified by model as 1: 8 times
+Examples labeled as 2 classified by model as 2: 16 times
+
+
+==========================Scores========================================
+ Accuracy:  1
+ Precision: 1
+ Recall:    1
+ F1 Score:  1
+========================================================================
+2021-01-04 17:38:12 WARN  Evaluation:89 - Creating confusion matrix based on classes passed in . Will assume the label distribution passed in is indicative of the overall dataset
+Statistics...
+Examples labeled as 0 classified by model as 0: 6 times
+Examples labeled as 1 classified by model as 1: 8 times
+Examples labeled as 2 classified by model as 2: 16 times
+
+
+==========================Scores========================================
+ Accuracy:  1
+ Precision: 1
+ Recall:    1
+ F1 Score:  1
+========================================================================
